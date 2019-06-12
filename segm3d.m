@@ -1,23 +1,19 @@
-clear pointCloud;
+function sphereRadius = segm3d(colorImage, depthImage)
+    % Preprocess images
+    [BW, ~] = createMask(colorImage);
+    [~, properties] = filterRegions(BW);
+    sphereProps = properties(1);
 
-% Load images
-colorImage = imread('./color.png');
-[BW, maskedImage] = createMask(colorImage);
-[BW_out,properties] = filterRegions(BW);
-sphereProps = properties(1);
+    % Create point cloud
+    pointCloud = findROI(colorImage, depthImage, sphereProps.PixelList);
 
-depthImage = double(imread('./depth.png'));
+    % Detect the table and extract it from the point cloud
+    remainPtCloud = removePlane(pointCloud);
 
-% Create point cloud
-pointCloud = findROI(colorImage, depthImage);
-
-% Detect the table and extract it from the point cloud
-remainPtCloud = removePlane(pointCloud);
-
-% Detect the globe and extract it from the point cloud
-[model, globePointsCloud] = extractSphereFromPointCloud(remainPtCloud);
-pcshow(globePointsCloud);
-disp(model.Radius);
+    % Detect the globe and extract it from the point cloud
+    [model, ~] = extractSphereFromPointCloud(remainPtCloud);
+    sphereRadius = model.Radius;
+end
 
 function [model, globePointsCloud] = extractSphereFromPointCloud(remainPointCloud)
     maxDistance = 100;
@@ -28,8 +24,8 @@ function [model, globePointsCloud] = extractSphereFromPointCloud(remainPointClou
 end
 
 function pointCloud = removePlane(pointCloudWithPlane)
-    maxDistance = 60;
-    [~, ~, outlierIndices] = pcfitplane(pointCloudWithPlane, maxDistance);
+    maxDistance = 30;
+    [~, ~, outlierIndices] = pcfitplane(pointCloudWithPlane, maxDistance, 'Confidence', 99.99);
     pointCloud = select(pointCloudWithPlane, outlierIndices);  
 end
 
@@ -46,7 +42,7 @@ function pointsCloud = findROI(colorImage, depthImage, pixelList)
     for k=1:size(pixelList)
         i = pixelList(k, 2);
         j = pixelList(k, 1);
-                if(colorImage(i,j,1) > 90 && colorImage(i,j,2) > 90 && colorImage(i,j,3) > 90)
+                if(maskedImage(i,j,1) > 90 && maskedImage(i,j,2) > 90 && maskedImage(i,j,3) > 90)
                     x = i; y= j; z = depthImage(i,j);
                     points(i,j,1) = (x - cx)*z/fx;
                     points(i,j,2) = (y - cy)*z/fy;
@@ -57,29 +53,7 @@ function pointsCloud = findROI(colorImage, depthImage, pixelList)
                     points(i,j,3) = Inf;
                 end
     end
-    pointsCloud = pointCloud(points, 'Color', colorImage);
+    pointsCloud = pointCloud(points, 'Color', maskedImage);
     [pointsCloud, ~] = removeInvalidPoints(pointsCloud);
 end
-
-
-function pointsCloud = createPointMatrix(colorImage, depthImage)
-    fx = 525;
-    fy = fx;
-    cx = 312;
-    cy = 264;
-    
-    [imageWidth, imageHeight, ~] = size(colorImage);
-    points = zeros(imageWidth, imageHeight, 3);
-    
-    for i=1:imageWidth
-        for j=1:imageHeight
-            x = i; y= j; z = depthImage(i,j);
-            points(i,j,1) = (x - cx)*z/fx;
-            points(i,j,2) = (y - cy)*z/fy;
-            points(i,j,3) = z;
-        end
-    end
-    pointsCloud = pointCloud(points, 'Color', colorImage);
-end
-
 
